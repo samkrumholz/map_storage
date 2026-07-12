@@ -1,0 +1,18 @@
+data/
+data_fb/
+data_ses/
+nhgis_downloads/
+tmp_vac/
+node_modules/
+tools/*.exe
+tools/*.zip
+tools/*.log
+*.mbtiles
+*.geojson
+
+# Held back until ready to publish
+school.html
+portal.html
+test_pmtiles.html
+data_pmtiles/school_*.pmtiles
+data_pmtiles/school_districts.pmtiles

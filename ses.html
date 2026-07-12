@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>SES by Census Tract, 1940–2022</title>
+  <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+  <link  href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
+  <script src="https://unpkg.com/pmtiles@3.0.7/dist/pmtiles.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 0; font-family: -apple-system, Arial, sans-serif; background: #111; }
+    #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+
+    #controls {
+      position: absolute; top: 10px; left: 10px; z-index: 10;
+      background: rgba(255,255,255,0.95);
+      padding: 12px 16px; border-radius: 6px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.25);
+      min-width: 220px;
+    }
+    #controls h3 {
+      margin: 0 0 8px; font-size: 13px; font-weight: 600; color: #222;
+      border-bottom: 1px solid #ddd; padding-bottom: 6px;
+    }
+    .year-row {
+      display: flex; align-items: center; margin: 5px 0; gap: 8px;
+    }
+    .year-row input[type=radio] { cursor: pointer; accent-color: #2171b5; }
+    .year-row label { font-size: 13px; color: #333; cursor: pointer; flex: 1; }
+    .year-note { font-size: 10px; color: #999; display: block; }
+    .spinner {
+      display: inline-block; width: 9px; height: 9px; border-radius: 50%;
+      border: 2px solid #2171b5; border-top-color: transparent;
+      animation: spin 0.8s linear infinite; flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .section-divider { border-top: 1px solid #ddd; margin: 10px 0 8px; }
+
+    .var-row {
+      display: flex; align-items: center; margin: 4px 0; gap: 8px;
+    }
+    .var-row input[type=radio] { cursor: pointer; accent-color: #2171b5; }
+    .var-row label { font-size: 13px; color: #333; cursor: pointer; flex: 1; }
+
+    #controls footer {
+      margin-top: 10px; padding-top: 8px; border-top: 1px solid #eee;
+      font-size: 10px; color: #aaa; line-height: 1.4;
+    }
+
+    #legend {
+      position: absolute; bottom: 30px; right: 10px; z-index: 10;
+      background: rgba(255,255,255,0.95);
+      padding: 10px 14px; border-radius: 6px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.25);
+    }
+    #legend h4 { margin: 0 0 7px; font-size: 12px; color: #333; }
+    #legend-bar {
+      width: 170px; height: 13px; border-radius: 2px;
+    }
+    .legend-ticks {
+      display: flex; justify-content: space-between;
+      font-size: 10px; color: #666; margin-top: 3px;
+    }
+    .legend-nodata {
+      display: flex; align-items: center; gap: 5px;
+      font-size: 10px; color: #888; margin-top: 6px;
+    }
+    .nodata-swatch {
+      width: 16px; height: 10px; background: #cccccc; border-radius: 1px;
+    }
+
+    /* ── Border filter button ── */
+    .border-btn {
+      width: 100%; padding: 7px 10px; margin-top: 2px;
+      border: 1.5px solid #2171b5; border-radius: 4px;
+      background: #fff; color: #2171b5;
+      font-size: 11.5px; line-height: 1.4; cursor: pointer; text-align: center;
+    }
+    .border-btn:hover:not(.active) { background: #e8f0f8; }
+    .border-btn.active { background: #2171b5; color: #fff; }
+
+    #tooltip {
+      position: absolute; z-index: 20; pointer-events: none; display: none;
+      background: rgba(20,20,20,0.88); color: #f0f0f0;
+      padding: 8px 11px; border-radius: 5px;
+      font-size: 12px; line-height: 1.55; max-width: 230px;
+    }
+    #tooltip strong { color: #fff; }
+  </style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<div style="position:absolute;top:10px;right:50px;z-index:10;background:rgba(255,255,255,0.9);padding:6px 10px;border-radius:5px;font-size:12px;">
+  <a href="index.html" style="color:#333;text-decoration:none;">→ Race map</a>
+  &nbsp;|&nbsp;
+  <a href="vacancy.html" style="color:#333;text-decoration:none;">→ Vacancy map</a>
+  &nbsp;|&nbsp;
+  <a href="foreign.html" style="color:#333;text-decoration:none;">→ Foreign born map</a>
+</div>
+
+<div id="controls">
+  <h3>Census Year</h3>
+
+  <div class="year-row">
+    <input type="radio" name="year" id="cb1940" value="1940" />
+    <label for="cb1940">1940 <span class="year-note">Cities only, sparse</span></label>
+  </div>
+  <div class="year-row">
+    <input type="radio" name="year" id="cb1950" value="1950" />
+    <label for="cb1950">1950 <span class="year-note">Cities only, sparse</span></label>
+  </div>
+  <div class="year-row">
+    <input type="radio" name="year" id="cb1960" value="1960" />
+    <label for="cb1960">1960 <span class="year-note">Partial national coverage</span></label>
+  </div>
+  <div class="year-row">
+    <input type="radio" name="year" id="cb1970" value="1970" />
+    <label for="cb1970">1970 <span class="year-note">Near-nationwide</span></label>
+  </div>
+  <div class="year-row">
+    <input type="radio" name="year" id="cb1980" value="1980" />
+    <label for="cb1980">1980</label>
+  </div>
+  <div class="year-row">
+    <input type="radio" name="year" id="cb1990" value="1990" />
+    <label for="cb1990">1990</label>
+  </div>
+  <div class="year-row">
+    <input type="radio" name="year" id="cb2000" value="2000" />
+    <label for="cb2000">2000</label>
+  </div>
+  <div class="year-row">
+    <input type="radio" name="year" id="cb2012" value="2012" />
+    <label for="cb2012">2012 <span class="year-note">ACS 2008–12</span></label>
+  </div>
+  <div class="year-row">
+    <input type="radio" name="year" id="cb2022" value="2022" checked />
+    <label for="cb2022">2022 <span class="year-note">ACS 2018–22</span></label>
+  </div>
+
+  <div class="section-divider"></div>
+  <h3 style="margin:0 0 8px;">Variable</h3>
+
+  <div class="var-row">
+    <input type="radio" name="var" id="v_edu" value="edu" checked />
+    <label for="v_edu">BA+ share (adults 25+)</label>
+  </div>
+  <div class="var-row">
+    <input type="radio" name="var" id="v_hv" value="hv" />
+    <label for="v_hv">Median home value (2022$)</label>
+  </div>
+
+  <div class="section-divider" id="border-divider" style="display:none"></div>
+  <button id="btn-border" class="border-btn" style="display:none">
+    Border pairs only<br><small>≥2× home value diff</small>
+  </button>
+
+  <footer>
+    Boundaries differ across years.<br>
+    Gray = no data for this tract.<br>
+    Home value: owner-occupied units only.<br>
+    Education: 1940–1980 = college 4+ yrs;<br>
+    1990+ = BA or higher degree.
+  </footer>
+</div>
+
+<div id="legend">
+  <h4 id="legend-title">BA+ share</h4>
+  <div id="legend-bar" class="legend-bar"></div>
+  <div id="legend-ticks" class="legend-ticks"></div>
+  <div class="legend-nodata">
+    <div class="nodata-swatch"></div>
+    <span>No data</span>
+  </div>
+</div>
+
+<div id="tooltip"></div>
+
+<script>
+const YEARS = ['1940','1950','1960','1970','1980','1990','2000','2012','2022'];
+
+// ── Variable config ───────────────────────────────────────────────────────────
+const VAR_CFG = {
+  edu: {
+    prop:    'edu_share',
+    label:   'BA+ share',
+    barGrad: 'linear-gradient(to right, #f7fbff 0%, #c6dbef 25%, #6baed6 50%, #2171b5 75%, #08519c 100%)',
+    ticks:   ['0%','25%','50%','75%','100%'],
+    colorExpr: (prop) => ['case',
+      ['any', ['==', ['get', prop], null], ['!', ['has', prop]]],
+      '#cccccc',
+      ['interpolate', ['linear'], ['get', prop],
+        0.00, '#f7fbff',
+        0.20, '#c6dbef',
+        0.40, '#6baed6',
+        0.60, '#2171b5',
+        0.80, '#08519c',
+        1.00, '#08306b'
+      ]
+    ],
+    fmt: v => (v * 100).toFixed(1) + '%'
+  },
+  hv: {
+    prop:    'hv_2022',
+    label:   'Median home value (2022$)',
+    barGrad: 'linear-gradient(to right, #ffffe5 0%, #d9f0a3 20%, #78c679 40%, #31a354 60%, #006837 80%, #004529 100%)',
+    ticks:   ['$30k','$100k','$300k','$1M','$3M+'],
+    colorExpr: (prop) => ['case',
+      ['any', ['==', ['get', prop], null], ['!', ['has', prop]],
+              ['<=', ['get', prop], 0]],
+      '#cccccc',
+      ['interpolate', ['linear'], ['ln', ['coalesce', ['get', prop], 1]],
+        10.3, '#ffffe5',   // ~$30k
+        11.5, '#d9f0a3',   // ~$100k
+        12.6, '#78c679',   // ~$300k
+        13.8, '#31a354',   // ~$1M
+        14.5, '#006837',   // ~$2M
+        14.9, '#004529'    // ~$3M
+      ]
+    ],
+    fmt: v => '$' + (v >= 1e6
+      ? (v/1e6).toFixed(2) + 'M'
+      : (v >= 1e3 ? Math.round(v/1e3) + 'k' : v))
+  }
+};
+
+let currentYear = '2022';
+let currentVar  = 'edu';
+let borderFilterActive = false;
+
+const loaded   = {};
+
+// ── Map init ──────────────────────────────────────────────────────────────────
+const map = new maplibregl.Map({
+  container: 'map',
+  style: {
+    version: 8,
+    glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
+    sources: {
+      carto: {
+        type: 'raster',
+        tiles: [
+          'https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
+          'https://b.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
+          'https://c.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png'
+        ],
+        tileSize: 256, maxzoom: 19,
+        attribution: '© <a href="https://carto.com/attributions">CARTO</a> © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+      }
+    },
+    layers: [{ id: 'base-tiles', type: 'raster', source: 'carto' }]
+  },
+  center: [-96, 38], zoom: 4, minZoom: 2, maxZoom: 14
+});
+
+map.addControl(new maplibregl.NavigationControl(), 'top-right');
+map.addControl(new maplibregl.ScaleControl({ maxWidth: 120, unit: 'imperial' }), 'bottom-left');
+
+const pmtilesProtocol = new pmtiles.Protocol();
+maplibregl.addProtocol('pmtiles', pmtilesProtocol.tile);
+
+// ── Load a year's vector tiles ───────────────────────────────────────────────
+function loadYear(year) {
+  if (loaded[year]) return;
+  loaded[year] = true;
+
+  map.addSource('src-' + year, {
+    type: 'vector',
+    url: 'pmtiles://data_pmtiles_ses/ses_' + year + '.pmtiles'
+  });
+
+  const cfg = VAR_CFG[currentVar];
+  map.addLayer({
+    id: 'fill-' + year, type: 'fill', source: 'src-' + year, 'source-layer': 'ses_' + year,
+    paint: {
+      'fill-color': cfg.colorExpr(cfg.prop),
+      'fill-opacity': 0.55
+    }
+  });
+  map.addLayer({
+    id: 'line-' + year, type: 'line', source: 'src-' + year, 'source-layer': 'ses_' + year,
+    paint: {
+      'line-color': '#555',
+      'line-width': ['interpolate', ['linear'], ['zoom'], 4, 0.0, 7, 0.2, 11, 0.6],
+      'line-opacity': 0.35
+    }
+  });
+
+  if (borderFilterActive) {
+    const f = ['>=', ['get', 'max_hv_ratio'], 2.00];
+    map.setFilter('fill-' + year, f);
+    map.setFilter('line-' + year, f);
+  }
+}
+
+function setVisible(year, on) {
+  const v = on ? 'visible' : 'none';
+  ['fill-','line-'].forEach(pfx => {
+    if (map.getLayer(pfx + year)) map.setLayoutProperty(pfx + year, 'visibility', v);
+  });
+}
+
+// ── Year selection ────────────────────────────────────────────────────────────
+function selectYear(year) {
+  const prev = currentYear;
+  currentYear = year;
+  if (!loaded[year]) loadYear(year);
+  setVisible(year, true);
+  if (prev !== year && loaded[prev]) setVisible(prev, false);
+}
+
+// ── Variable selection ────────────────────────────────────────────────────────
+function selectVar(varKey) {
+  currentVar = varKey;
+  const cfg = VAR_CFG[varKey];
+
+  document.getElementById('legend-title').textContent = cfg.label;
+  document.getElementById('legend-bar').style.background = cfg.barGrad;
+  const tickEl = document.getElementById('legend-ticks');
+  tickEl.innerHTML = cfg.ticks.map(t => `<span>${t}</span>`).join('');
+
+  YEARS.forEach(y => {
+    if (map.getLayer('fill-' + y)) {
+      map.setPaintProperty('fill-' + y, 'fill-color', cfg.colorExpr(cfg.prop));
+    }
+  });
+
+  // Border filter only meaningful for home value
+  if (varKey !== 'hv' && borderFilterActive) {
+    borderFilterActive = false;
+    document.getElementById('btn-border').classList.remove('active');
+    applyBorderFilter();
+  }
+  document.getElementById('border-divider').style.display = varKey === 'hv' ? '' : 'none';
+  document.getElementById('btn-border').style.display     = varKey === 'hv' ? '' : 'none';
+}
+
+// ── Border filter ─────────────────────────────────────────────────────────────
+function applyBorderFilter() {
+  const f = borderFilterActive ? ['>=', ['get', 'max_hv_ratio'], 2.00] : null;
+  YEARS.forEach(y => {
+    if (map.getLayer('fill-' + y)) map.setFilter('fill-' + y, f);
+    if (map.getLayer('line-' + y)) map.setFilter('line-' + y, f);
+  });
+}
+
+// ── Wire up controls ──────────────────────────────────────────────────────────
+map.on('load', () => {
+  loadYear('2022');
+
+  YEARS.forEach(year => {
+    document.getElementById('cb' + year).addEventListener('change', function() {
+      if (this.checked) selectYear(year);
+    });
+  });
+
+  document.querySelectorAll('input[name="var"]').forEach(rb => {
+    rb.addEventListener('change', function() {
+      if (this.checked) selectVar(this.value);
+    });
+  });
+
+  document.getElementById('btn-border').addEventListener('click', function() {
+    borderFilterActive = !borderFilterActive;
+    this.classList.toggle('active', borderFilterActive);
+    applyBorderFilter();
+  });
+
+  // init legend
+  selectVar('edu');
+});
+
+// ── Tooltip ───────────────────────────────────────────────────────────────────
+const tooltip = document.getElementById('tooltip');
+
+map.on('mousemove', e => {
+  const activeLayers = YEARS
+    .map(y => 'fill-' + y)
+    .filter(id => map.getLayer(id) &&
+      map.getLayoutProperty(id, 'visibility') !== 'none');
+
+  if (!activeLayers.length) { tooltip.style.display = 'none'; return; }
+
+  const features = map.queryRenderedFeatures(e.point, { layers: activeLayers });
+  if (!features.length) {
+    tooltip.style.display = 'none';
+    map.getCanvas().style.cursor = '';
+    return;
+  }
+
+  const p = features[0].properties;
+  const eduVal = p.edu_share != null ? (parseFloat(p.edu_share) * 100).toFixed(1) + '%' : 'N/A';
+  const hvVal  = p.hv_2022  != null ? VAR_CFG.hv.fmt(parseFloat(p.hv_2022)) : 'N/A';
+
+  tooltip.innerHTML =
+    `<strong>${p.year} Census</strong><br/>` +
+    `BA+ share: <strong>${eduVal}</strong><br/>` +
+    `Home value (2022$): <strong>${hvVal}</strong>`;
+
+  const mapW = map.getCanvas().width;
+  const x    = e.point.x + 14;
+  const y    = e.point.y - 10;
+  tooltip.style.left    = (x + 240 > mapW ? e.point.x - 235 : x) + 'px';
+  tooltip.style.top     = y + 'px';
+  tooltip.style.display = 'block';
+  map.getCanvas().style.cursor = 'crosshair';
+});
+
+map.on('mouseleave', () => {
+  tooltip.style.display = 'none';
+  map.getCanvas().style.cursor = '';
+});
+</script>
+</body>
+</html>

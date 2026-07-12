@@ -1,0 +1,20 @@
+{
+  "name": "white_map",
+  "version": "1.0.0",
+  "description": "",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "better-sqlite3": "^12.11.1",
+    "geojson-vt": "^4.0.3",
+    "pbf": "^5.1.2",
+    "vt-pbf": "^3.1.3"
+  }
+}

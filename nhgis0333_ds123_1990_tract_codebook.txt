@@ -1,0 +1,140 @@
+--------------------------------------------------------------------------------
+Codebook for NHGIS data file 'nhgis0333_ds123_1990_tract'
+--------------------------------------------------------------------------------
+ 
+Contents
+    - Data Summary
+    - Data Dictionary
+    - Citation and Use
+ 
+Additional documentation on NHGIS data sources is available at: 
+    https://www.nhgis.org/documentation/tabular-data 
+ 
+--------------------------------------------------------------------------------
+Data Summary
+--------------------------------------------------------------------------------
+ 
+Year:             1990
+Geographic level: Census Tract (by State--County)
+Extent:           All areas
+Dataset:          1990 Census: STF 3 - Sample-Based Data
+   NHGIS code:    1990_STF3
+   NHGIS ID:      ds123
+Breakdown(s):     Geographic Subarea:
+                     Total area (00)
+ 
+Tables:
+ 
+1. Place of Birth
+   Universe:    Persons
+   Source code: NP42
+   NHGIS code:  E3N
+ 
+--------------------------------------------------------------------------------
+Data Dictionary
+--------------------------------------------------------------------------------
+ 
+Context Fields 
+        GISJOIN:     GIS Join Match Code
+        YEAR:        Data File Year
+        STUSAB:      State/US Abbreviation
+        ANRCA:       Alaska Native Regional Corporation Code
+        AIANHHA:     American Indian Area/Alaska Native Area/Hawaiian Home Land Code
+        RES_ONLYA:   American Indian Reservation [excluding trust lands] Code
+        TRUSTA:      American Indian Reservation [trust lands only] Code
+        AIANCC:      American Indian/Alaska Native Area Class Code
+        RES_TRSTA:   Reservation/Trust Lands Code
+        BLCK_GRPA:   Block Group Code
+        TRACTA:      Census Tract Code
+        CD101A:      Congressional District (101st) Code
+        C_CITYA:     Consolidated City Code
+        CMSA:        Consolidated Metropolitan Statistical Area
+        COUNTY:      County Name
+        COUNTYA:     County Code
+        CTY_SUBA:    County Subdivision Code
+        COUSUBCC:    County Subdivision Class Code
+        DIVISIONA:   Division Code
+        MSA_CMSAA:   Metropolitan Statistical Area/Consolidated Metropolitan Statistical Area Code
+        PLACEA:      Place Code
+        PLACECC:     Place Class Code
+        PLACEDC:     Place Description Code
+        PMSAA:       Primary Metropolitan Statistical Area Code
+        REGIONA:     Region Code
+        STATE:       State Name
+        STATEA:      State Code
+        URBRURALA:   Urban/Rural Code
+        URB_AREAA:   Urban Area Code
+        ZIPA:        5-Digit ZIP Code Code
+        CD103A:      Congressional District (103rd) Code
+        AREALAND:    Area (land)
+        AREAWAT:     Area (Water)
+        ANPSADPI:    Area Name/PSAD Term/Part Indicator
+        FUNCSTAT:    Functional Status Code
+        INTPTLAT:    Internal Point (latitude)
+        INTPTLNG:    Internal Point (longitude)
+        PSADC:       Political/Statistical Area Description Code
+ 
+Breakdown:
+    Geographic Subarea: Total area (00)
+ 
+    Table 1:     Place of Birth
+    Universe:    Persons
+    Source code: NP42
+    NHGIS code:  E3N
+        E3N001:      Native (001-099): Born in State of residence
+        E3N002:      Native (001-099): Born in other State in the United States (001-059): Northeast (009, 023, 025, 033-034, 036, 042-044, 050)
+        E3N003:      Native (001-099): Born in other State in the United States (001-059): Midwest (017-020, 026-027, 029, 031, 038-039, 046, 055)
+        E3N004:      Native (001-099): Born in other State in the United States (001-059): South (001, 005, 010-014, 021-022, 024, 028, 037, 040, 045, 047-048, 051-052, 054)
+        E3N005:      Native (001-099): Born in other State in the United States (001-059): West (002-004, 006-008, 015-016, 030, 032, 035, 041, 049, 053, 056-059)
+        E3N006:      Native (001-099): Born outside the United States (060-099): Puerto Rico (072-075)
+        E3N007:      Native (001-099): Born outside the United States (060-099): U.S. outlying area (060-071, 076-099)
+        E3N008:      Native (001-099): Born outside the United States (060-099): Born abroad of American parent(s)
+        E3N009:      Foreign born (100-999)
+ 
+--------------------------------------------------------------------------------
+Citation and Use of NHGIS Data
+--------------------------------------------------------------------------------
+ 
+All persons are granted a limited license to use this documentation and the
+accompanying data, subject to the following conditions:
+
+* REDISTRIBUTION: You will not redistribute the data without permission.
+
+  You may publish a subset of the data to meet journal requirements for accessing 
+  data related to a particular publication. Contact us for permission for any other 
+  redistribution; we will consider requests for free and commercial redistribution.
+
+* CITATION: You will cite NHGIS appropriately.
+
+    * Publications and research reports employing NHGIS data (either tabular or GIS) 
+      should include the following citation:
+
+        Jonathan Schroeder, David Van Riper, Steven Manson, Katherine Knowles, Tracy Kugler, Finn Roberts, and Steven Ruggles. 
+        IPUMS National Historical Geographic Information System: Version 20.0 
+        [dataset]. Minneapolis, MN: IPUMS. 2025. 
+        http://doi.org/10.18128/D050.V20.0
+
+    * For policy briefs, online resources, or articles in the popular press, we 
+      recommend that you cite the use of NHGIS data as follows:
+
+        IPUMS NHGIS, University of Minnesota, www.nhgis.org.
+
+These terms of use are a legally binding agreement. You can use the data only in 
+accordance with these terms, and any other use is a violation of the agreement. 
+Violations may result in revocation of the agreement and prohibition from using other 
+IPUMS data. If IPUMS or our partners are harmed from your violation, you are 
+responsible for all damages, including reasonable attorney's fees and expenses.
+        
+In addition, we request that users send us a copy of any publications, research
+reports, or educational material making use of the data or documentation.
+
+Send electronic material to: nhgis@umn.edu
+
+Printed matter should be sent to:
+
+    IPUMS NHGIS
+    Institute for Social Research and Data Innovation
+    University of Minnesota
+    50 Willey Hall
+    225 19th Ave S
+    Minneapolis, MN 55455

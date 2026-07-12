@@ -1,0 +1,164 @@
+--------------------------------------------------------------------------------
+Codebook for NHGIS data file 'nhgis0333_ds76_1940_tract'
+--------------------------------------------------------------------------------
+ 
+Contents
+    - Data Summary
+    - Data Dictionary
+    - Citation and Use
+ 
+Additional documentation on NHGIS data sources is available at: 
+    https://www.nhgis.org/documentation/tabular-data 
+ 
+--------------------------------------------------------------------------------
+Data Summary
+--------------------------------------------------------------------------------
+ 
+Year:             1940
+Geographic level: Census Tract (by State--County)
+Extent:           All areas
+Dataset:          1940 Census: Population & Housing Data [Tracts & NY Health Areas: Major Cities & Surrounds]
+   NHGIS code:    1940_tPH_Major
+   NHGIS ID:      ds76
+ 
+Tables:
+ 
+1. Foreign Born White Population by Sex by Nativity
+   Universe:    Foreign Born White Population 1940
+   Source code: NT14
+   NHGIS code:  BUG
+ 
+--------------------------------------------------------------------------------
+Data Dictionary
+--------------------------------------------------------------------------------
+ 
+Context Fields 
+    GISJOIN:     GIS Join Match Code
+    YEAR:        Data File Year
+    STATE:       State Name
+    STATEA:      State Code
+    COUNTY:      County Name
+    COUNTYA:     County Code
+    PRETRACTA:   Census Tract Prefix Code
+    TRACTA:      Census Tract Code
+    POSTTRCTA:   Census Tract Suffix Code
+    AREANAME:    Area Name
+ 
+Table 1:     Foreign Born White Population by Sex by Nativity
+Universe:    Foreign Born White Population 1940
+Source code: NT14
+NHGIS code:  BUG
+    BUG001:      Male >> England and Wales
+    BUG002:      Male >> Scotland
+    BUG003:      Male >> Northern Ireland
+    BUG004:      Male >> Eire
+    BUG005:      Male >> Norway
+    BUG006:      Male >> Sweden
+    BUG007:      Male >> Denmark
+    BUG008:      Male >> Netherlands
+    BUG009:      Male >> Belgium
+    BUG010:      Male >> Switzerland
+    BUG011:      Male >> France
+    BUG012:      Male >> Germany
+    BUG013:      Male >> Poland
+    BUG014:      Male >> Czechoslovakia
+    BUG015:      Male >> Austria
+    BUG016:      Male >> Hungary
+    BUG017:      Male >> Yugoslavia
+    BUG018:      Male >> Russia
+    BUG019:      Male >> Lithuania
+    BUG020:      Male >> Finland
+    BUG021:      Male >> Romania
+    BUG022:      Male >> Greece
+    BUG023:      Male >> Italy
+    BUG024:      Male >> Spain and Portugal
+    BUG025:      Male >> Other Europe
+    BUG026:      Male >> Asia
+    BUG027:      Male >> Canada-French
+    BUG028:      Male >> Canada-other
+    BUG029:      Male >> Newfoundland
+    BUG030:      Male >> Mexico
+    BUG031:      Male >> Cuba
+    BUG032:      Male >> Central America
+    BUG033:      Male >> Other
+    BUG034:      Female >> England and Wales
+    BUG035:      Female >> Scotland
+    BUG036:      Female >> Northern Ireland
+    BUG037:      Female >> Eire
+    BUG038:      Female >> Norway
+    BUG039:      Female >> Sweden
+    BUG040:      Female >> Denmark
+    BUG041:      Female >> Netherlands
+    BUG042:      Female >> Belgium
+    BUG043:      Female >> Switzerland
+    BUG044:      Female >> France
+    BUG045:      Female >> Germany
+    BUG046:      Female >> Poland
+    BUG047:      Female >> Czechoslovakia
+    BUG048:      Female >> Austria
+    BUG049:      Female >> Hungary
+    BUG050:      Female >> Yugoslavia
+    BUG051:      Female >> Russia
+    BUG052:      Female >> Lithuania
+    BUG053:      Female >> Finland
+    BUG054:      Female >> Romania
+    BUG055:      Female >> Greece
+    BUG056:      Female >> Italy
+    BUG057:      Female >> Spain and Portugal
+    BUG058:      Female >> Other Europe
+    BUG059:      Female >> Asia
+    BUG060:      Female >> Canada-French
+    BUG061:      Female >> Canada-other
+    BUG062:      Female >> Newfoundland
+    BUG063:      Female >> Mexico
+    BUG064:      Female >> Cuba
+    BUG065:      Female >> Central America
+    BUG066:      Female >> Other
+ 
+--------------------------------------------------------------------------------
+Citation and Use of NHGIS Data
+--------------------------------------------------------------------------------
+ 
+All persons are granted a limited license to use this documentation and the
+accompanying data, subject to the following conditions:
+
+* REDISTRIBUTION: You will not redistribute the data without permission.
+
+  You may publish a subset of the data to meet journal requirements for accessing 
+  data related to a particular publication. Contact us for permission for any other 
+  redistribution; we will consider requests for free and commercial redistribution.
+
+* CITATION: You will cite NHGIS appropriately.
+
+    * Publications and research reports employing NHGIS data (either tabular or GIS) 
+      should include the following citation:
+
+        Jonathan Schroeder, David Van Riper, Steven Manson, Katherine Knowles, Tracy Kugler, Finn Roberts, and Steven Ruggles. 
+        IPUMS National Historical Geographic Information System: Version 20.0 
+        [dataset]. Minneapolis, MN: IPUMS. 2025. 
+        http://doi.org/10.18128/D050.V20.0
+
+    * For policy briefs, online resources, or articles in the popular press, we 
+      recommend that you cite the use of NHGIS data as follows:
+
+        IPUMS NHGIS, University of Minnesota, www.nhgis.org.
+
+These terms of use are a legally binding agreement. You can use the data only in 
+accordance with these terms, and any other use is a violation of the agreement. 
+Violations may result in revocation of the agreement and prohibition from using other 
+IPUMS data. If IPUMS or our partners are harmed from your violation, you are 
+responsible for all damages, including reasonable attorney's fees and expenses.
+        
+In addition, we request that users send us a copy of any publications, research
+reports, or educational material making use of the data or documentation.
+
+Send electronic material to: nhgis@umn.edu
+
+Printed matter should be sent to:
+
+    IPUMS NHGIS
+    Institute for Social Research and Data Innovation
+    University of Minnesota
+    50 Willey Hall
+    225 19th Ave S
+    Minneapolis, MN 55455
