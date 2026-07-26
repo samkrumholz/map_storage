@@ -1,6 +1,129 @@
 # White Share Map — Session Notes
 **Started:** 2026-04-20  
-**Updated:** 2026-05-08
+**Updated:** 2026-07-25
+
+## Session 2026-07-25
+
+Project has grown well beyond the original race map since the last note update — there are
+now 5 maps total, all launched from `portal.html`: Race (`index.html`), Vacancy
+(`vacancy.html`), SES (`ses.html`), Foreign Born (`foreign.html`), Schools (`school.html`).
+Each has its own data pipeline and its own (previously independent) color-scale code — there
+is no shared `makeColorExpr` across files, contrary to what you might assume from `index.html`
+alone.
+
+User asked for three things across "the maps in white_map": (1) sharper low/high color
+contrast, (2) a percentile-within-metro toggle + metro boundaries, (3) a Zillow ZHVI zip-level
+toggle for SES home value with a year slider + compare-year feature. Scoped with the user via
+AskUserQuestion before building (2)/(3) since neither had any supporting data in the project:
+- **(2) scope**: Race and SES maps only (not Vacancy/Foreign Born/Schools).
+- **(2) metro reference frame**: fixed 2020 CBSA delineations applied to every census year via
+  centroid point-in-polygon (not period-specific metro definitions). Tradeoff: tracts that were
+  rural at the time but sit inside a metro's *current* footprint get included.
+- **(3) compare-year behavior**: a toggle between % change and absolute $ change between two
+  selected years (not side-by-side panes, not hover-only).
+
+### (1) Sharper contrast — done, all 5 maps
+Every map's color ramp had a near-white/near-transparent low-end stop (e.g. `#f7fbff`,
+`#ffffb2`, `#f2f0f7`) that barely showed against the CARTO light basemap. Fix applied
+consistently: dropped that washed-out stop (shifted the ramp up one class) and added a new,
+darker stop at the top end for a more dramatic high extreme. Same treatment in
+`index.html`, `vacancy.html`, `foreign.html`, `school.html` (both the `makeColorExpr`-style
+JS function AND the corresponding CSS/legend gradient — `school.html` had a second,
+easy-to-miss copy of the gradient inside `updateLegend()` that also needed updating), and
+`ses.html` (both `edu` and `hv` variable configs).
+
+### (2) Percentile-within-metro toggle + metro boundaries — done, Race + SES maps
+- `nhgis_downloads/cbsa/tl_2020_us_cbsa.shp` — 2020 Census TIGER CBSA shapefile (939 areas;
+  `LSAD` field: `M1`=392 metro areas, `M2`=547 micro areas — filtered to M1 only for the
+  boundary display layer).
+- `07_metro_percentile.R` — for every year's `data/tracts_YYYY.geojson` (race) and
+  `data_ses/ses_YYYY.geojson` (SES): centroid-joins each tract to a 2020 CBSA, adds
+  `cbsa_id`/`cbsa_name`, and adds `<var>_pctile_metro` (0-1, `(rank-1)/(n-1)` within cbsa_id,
+  NA outside any metro) for `white_share` (race) and `edu_share`+`hv_2022` (SES). Also writes
+  `data/cbsa_boundaries.geojson` (simplified M1-only polygons for the map line layer).
+- `07b_race_percentile_topup.R` — adds the same percentile field for `black_share`,
+  `hispanic_share`, `asian_share` too (reuses the `cbsa_id` already written, no re-join).
+- Regenerated all 18 race+SES `.pmtiles` plus one new `data_pmtiles/cbsa_boundaries.pmtiles`
+  (shared by both `index.html` and `ses.html` via a relative path, single file, not per-year —
+  metro boundaries don't change across census years like tract geometry does).
+- `index.html` / `ses.html`: new "Percentile within metro" toggle button (same visual style as
+  the existing border-pairs button). When on: fill-color switches from the raw prop to
+  `<prop>_pctile_metro` (both are 0-1 so the SAME color ramp works for either — for `ses.html`'s
+  `hv` variable specifically, added a separate `pctileColorExpr()` since `hv`'s normal color
+  expression assumes raw log-dollars, which would be nonsense applied to a 0-1 percentile), the
+  metro boundary line layer becomes visible, and legend/tooltip update to show percentile +
+  metro name. Border-pairs filter is orthogonal and still works independently in either mode.
+- Coverage: ~85-90% of tracts fall inside a 2020 CBSA in most years; older/sparser years (1940
+  cities-only, etc.) naturally have lower/no coverage outside their few defined tracts.
+
+### (3) Zillow ZHVI zip-level toggle for SES — done
+- Downloaded (no API key needed, both public):
+  - `zillow_downloads/zhvi_zip.csv` — Zillow Research ZHVI, all zips, smoothed/seasonally
+    adjusted, monthly 2000-01 through 2026-06 (26,274 zips).
+  - `nhgis_downloads/zcta/tl_2020_us_zcta520.shp` — 2020 Census TIGER ZCTA5 boundaries
+    (~33k zip areas, 819MB raw shapefile).
+- **Hit the same bottleneck already documented below in the 1990/2000 note**: routing the
+  full-resolution national ZCTA shapefile through `rmapshaper::ms_simplify()` in R (even with
+  `sys=TRUE`) took 45+ min and was killed twice — R's own GeoJSON serialization of the raw
+  geometry before handing off to mapshaper was the bottleneck, not the simplification itself.
+  Fix (same as before): ran mapshaper CLI directly on the `.shp`:
+  `mapshaper -i tl_2020_us_zcta520.shp -simplify 3% weighting=0.7 keep-shapes -o
+  data_zillow/zcta_simplified.shp format=shapefile` — took 23 seconds. Lesson: for any future
+  nationwide TIGER shapefile, simplify via the CLI directly first, don't hand raw geometry to
+  `ms_simplify()` from R.
+- `08_zhvi_zcta.R` — reads the pre-simplified ZCTA shapefile, builds a Dec-snapshot-per-year
+  wide table from the ZHVI CSV (2000-2025 + latest partial month `zhvi_2026_latest` = 2026-06),
+  joins by 5-digit zip, writes `data_zillow/zhvi_zcta.geojson` (33,791 ZCTAs, 25,752 matched
+  to ZHVI, 77.4MB, 27 `zhvi_<year>` fields) — ONE file, not one per year, since ZCTA geometry
+  is static across the analysis period unlike decennial tract boundaries.
+- Converted to `data_pmtiles_zillow/zhvi_zcta.pmtiles` (101.8MB, maxzoom 10, layer
+  `zhvi_zcta`). Verified all 27 year fields survive per-feature in the actual tile encoding
+  (decoded a real tile directly with vt-pbf/@mapbox-vector-tile) — the pmtiles CLI's
+  `--metadata` field list only reflects `features[0]`'s properties
+  (`tools/geojson_to_pmtiles.js:127`), so it under-reports fields for the first feature's
+  data gaps; not a real bug, just a cosmetic quirk of that summary output.
+- `ses.html` UI, all gated on the `hv` variable being selected (button/controls hidden
+  otherwise):
+  - **Zillow toggle** (`btn-zillow`): swaps the visible layer from the current tract-year fill
+    to a national zip-level fill (`fill-zillow`/`line-zillow`), reusing `VAR_CFG.hv.colorExpr`
+    (already generic over which property it reads) for the single-year view.
+  - **Year slider**: index 0-26 over `ZHVI_YEARS` (2000...2025, 2026_latest), defaults to 2022.
+  - **Compare-year checkbox**: reveals a second year slider (default 2012) plus a %/$ radio
+    toggle, per your answer to the scoping question. Color is a 7-stop diverging ramp (red =
+    decline, blue = increase) — stops are a first-pass guess at typical zip-level swings
+    (±100% / ±$150k-300k), not derived from the actual national distribution of changes, so
+    they may need retuning once you've looked at it.
+  - Border-pairs and percentile-within-metro buttons are disabled while the Zillow layer is
+    active (both depend on tract-only fields the zip layer doesn't have).
+- Verified: `node --check` on the extracted script (syntax OK), server smoke test (200s for
+  `ses.html`, `zhvi_zcta.pmtiles`), and a direct tile-decode test confirming per-feature
+  properties are intact. **Not tested in an actual browser** — no browser tool available this
+  session; worth opening it once and clicking through the new controls before relying on it.
+
+### (3b) Follow-up after user found the Zillow toggle — done
+- User asked why the button wasn't visible: it's gated on `hv` being the selected Variable
+  radio (by design, since Zillow only applies to home value), which wasn't obvious from the UI.
+  No code change — just explained the click path (Variable → "Median home value (2022$)").
+- **New color scale for single-year Zillow view**: was reusing `VAR_CFG.hv.colorExpr` (all-green
+  ramp, shared with the tract-level Census home-value fill). User wanted green→yellow→red
+  instead. Added a dedicated `zillowSingleYearColorExpr()` / `ZILLOW_SEQ_COLORS` (7-stop
+  ColorBrewer-style RdYlGn on the same ln($) breakpoints as before, ~$22k to ~$3.3M) used only
+  for the Zillow layer's single-year mode — left `VAR_CFG.hv.colorExpr` (tract-level Census
+  values) untouched since that wasn't part of the ask. Compare-year mode keeps its own separate
+  diverging red/blue scale (`DIVERGING_COLORS`), unaffected.
+- Legend bar/ticks for Zillow single-year mode now pull from `ZILLOW_SEQ_GRAD`/`ZILLOW_SEQ_TICKS`
+  instead of `VAR_CFG.hv.barGrad`/`.ticks`.
+- **Paler fill**: `fill-zillow` opacity 0.65 → 0.42 so streets/labels on the CARTO basemap show
+  through better.
+- **Inflation-adjustment question**: confirmed ZHVI is nominal (current) dollars, not inflation-
+  adjusted. Zillow's own site (zhvi-methodology, zhvi-user-guide pages) returned 403 to WebFetch,
+  but corroborating evidence: multiple independent third-party analyses (Advisor
+  Perspectives/dshort "real home values" series) explicitly deflate Zillow's ZHVI by CPI
+  themselves to get an inflation-adjusted series — implying the raw ZHVI Zillow publishes is
+  nominal. If you need real values, would need to deflate `zhvi_<year>` by CPI (e.g. FRED
+  CPIAUCSL, December value each year) — not implemented.
+- Not yet re-tested in browser after this edit — same caveat as above.
+
 
 ## Project
 Interactive MapLibre GL map of White (Non-Hispanic where available) share by census tract, 1930–2020.

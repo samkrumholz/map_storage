@@ -80,6 +80,13 @@
     }
     .border-btn:hover:not(.active) { background: #e8f0f8; }
     .border-btn.active { background: #2171b5; color: #fff; }
+    .border-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .metro-btn { margin-top: 6px; }
+
+    #zillow-controls .year-row { margin: 4px 0; }
+    #zillow-controls input[type=range] { cursor: pointer; }
+    .compare-unit-row label { font-size: 11.5px; color: #333; cursor: pointer; display: flex; align-items: center; gap: 3px; }
+    .compare-unit-row input[type=radio] { cursor: pointer; accent-color: #2171b5; }
 
     #tooltip {
       position: absolute; z-index: 20; pointer-events: none; display: none;
@@ -154,9 +161,42 @@
     <label for="v_hv">Median home value (2022$)</label>
   </div>
 
+  <div class="section-divider" id="zillow-divider" style="display:none"></div>
+  <button id="btn-zillow" class="border-btn" style="display:none">
+    Zillow ZCTA (zip-level)<br><small>swap in zip-level home value index</small>
+  </button>
+
+  <div id="zillow-controls" style="display:none; margin-top:6px;">
+    <div class="year-row" style="gap:6px;">
+      <label style="font-size:11.5px;color:#333;min-width:70px;" id="zillow-year-label">2022</label>
+      <input type="range" id="zillow-year-slider" min="0" max="26" step="1" value="22" style="flex:1;accent-color:#2171b5;" />
+    </div>
+
+    <div class="year-row" style="margin-top:4px;">
+      <input type="checkbox" id="cb-compare" />
+      <label for="cb-compare" style="font-size:12px;">Compare to another year</label>
+    </div>
+
+    <div id="compare-controls" style="display:none; margin-top:2px;">
+      <div class="year-row" style="gap:6px;">
+        <label style="font-size:11.5px;color:#333;min-width:70px;" id="compare-year-label">2012</label>
+        <input type="range" id="compare-year-slider" min="0" max="26" step="1" value="12" style="flex:1;accent-color:#c94040;" />
+      </div>
+      <div class="year-row compare-unit-row" style="gap:12px; margin-top:2px;">
+        <label><input type="radio" name="compare-unit" value="pct" checked /> % change</label>
+        <label><input type="radio" name="compare-unit" value="abs" /> $ change</label>
+      </div>
+    </div>
+  </div>
+
   <div class="section-divider" id="border-divider" style="display:none"></div>
   <button id="btn-border" class="border-btn" style="display:none">
     Border pairs only<br><small>≥2× home value diff</small>
+  </button>
+
+  <div class="section-divider"></div>
+  <button id="btn-percentile" class="border-btn metro-btn">
+    Percentile within metro<br><small>vs. absolute value; shows metro boundaries</small>
   </button>
 
   <footer>
@@ -183,45 +223,55 @@
 <script>
 const YEARS = ['1940','1950','1960','1970','1980','1990','2000','2012','2022'];
 
+// ── Shared green -> yellow -> red scale for dollar-valued home-value fields ────
+// (both the Census tract hv variable and the Zillow zip layer use this same scale
+// now, so the two views read consistently). Stops are on a log scale.
+const DOLLAR_SEQ_STOPS = [10.0, 11.0, 11.8, 12.6, 13.4, 14.2, 15.0]; // ln($), ~22k..3.3M
+const DOLLAR_SEQ_COLORS = ['#1a9850','#66bd63','#a6d96a','#ffffbf','#fdae61','#f46d43','#a50026'];
+const DOLLAR_SEQ_TICKS = ['$22k','$77k','$270k','$940k','$3.3M+'];
+const DOLLAR_SEQ_GRAD = 'linear-gradient(to right, ' +
+  DOLLAR_SEQ_STOPS.map((s, i) => DOLLAR_SEQ_COLORS[i] + ' ' + Math.round((s - 10.0) / 5 * 100) + '%').join(', ') +
+  ')';
+
+function dollarColorExpr(prop) {
+  const interp = ['interpolate', ['linear'], ['ln', ['coalesce', ['get', prop], 1]]];
+  DOLLAR_SEQ_STOPS.forEach((s, i) => interp.push(s, DOLLAR_SEQ_COLORS[i]));
+  return ['case',
+    ['any', ['==', ['get', prop], null], ['!', ['has', prop]], ['<=', ['get', prop], 0]],
+    '#cccccc',
+    interp
+  ];
+}
+
 // ── Variable config ───────────────────────────────────────────────────────────
 const VAR_CFG = {
   edu: {
     prop:    'edu_share',
+    pctileProp: 'edu_share_pctile_metro',
     label:   'BA+ share',
-    barGrad: 'linear-gradient(to right, #f7fbff 0%, #c6dbef 25%, #6baed6 50%, #2171b5 75%, #08519c 100%)',
+    barGrad: 'linear-gradient(to right, #c6dbef 0%, #6baed6 25%, #2171b5 50%, #08519c 75%, #041f3d 100%)',
     ticks:   ['0%','25%','50%','75%','100%'],
     colorExpr: (prop) => ['case',
       ['any', ['==', ['get', prop], null], ['!', ['has', prop]]],
       '#cccccc',
       ['interpolate', ['linear'], ['get', prop],
-        0.00, '#f7fbff',
-        0.20, '#c6dbef',
-        0.40, '#6baed6',
-        0.60, '#2171b5',
-        0.80, '#08519c',
-        1.00, '#08306b'
+        0.00, '#c6dbef',
+        0.20, '#6baed6',
+        0.40, '#2171b5',
+        0.60, '#08519c',
+        0.80, '#08306b',
+        1.00, '#041f3d'
       ]
     ],
     fmt: v => (v * 100).toFixed(1) + '%'
   },
   hv: {
     prop:    'hv_2022',
+    pctileProp: 'hv_2022_pctile_metro',
     label:   'Median home value (2022$)',
-    barGrad: 'linear-gradient(to right, #ffffe5 0%, #d9f0a3 20%, #78c679 40%, #31a354 60%, #006837 80%, #004529 100%)',
-    ticks:   ['$30k','$100k','$300k','$1M','$3M+'],
-    colorExpr: (prop) => ['case',
-      ['any', ['==', ['get', prop], null], ['!', ['has', prop]],
-              ['<=', ['get', prop], 0]],
-      '#cccccc',
-      ['interpolate', ['linear'], ['ln', ['coalesce', ['get', prop], 1]],
-        10.3, '#ffffe5',   // ~$30k
-        11.5, '#d9f0a3',   // ~$100k
-        12.6, '#78c679',   // ~$300k
-        13.8, '#31a354',   // ~$1M
-        14.5, '#006837',   // ~$2M
-        14.9, '#004529'    // ~$3M
-      ]
-    ],
+    barGrad: DOLLAR_SEQ_GRAD,
+    ticks:   DOLLAR_SEQ_TICKS,
+    colorExpr: dollarColorExpr,
     fmt: v => '$' + (v >= 1e6
       ? (v/1e6).toFixed(2) + 'M'
       : (v >= 1e3 ? Math.round(v/1e3) + 'k' : v))
@@ -231,8 +281,158 @@ const VAR_CFG = {
 let currentYear = '2022';
 let currentVar  = 'edu';
 let borderFilterActive = false;
+let percentileMode = false;
 
 const loaded   = {};
+
+// ── Zillow ZCTA (zip-level home value) ──────────────────────────────────────
+const ZHVI_YEARS = [];
+for (let y = 2000; y <= 2025; y++) ZHVI_YEARS.push(String(y));
+ZHVI_YEARS.push('2026_latest');
+function zhviProp(idx)  { return 'zhvi_' + ZHVI_YEARS[idx]; }
+function zhviLabel(idx) {
+  const y = ZHVI_YEARS[idx];
+  return y.endsWith('_latest') ? y.replace('_latest', ' (latest)') : y;
+}
+
+let zillowMode     = false;
+let zillowYearIdx  = 22; // 2022
+let compareMode    = false;
+let compareYearIdx = 12; // 2012
+let compareUnit    = 'pct';
+
+const DIVERGING_COLORS = ['#7f0000','#d73027','#fee090','#ffffbf','#e0f3f8','#4575b4','#023858'];
+
+// Diverging color for change between two ZHVI years. Stops are a first-pass
+// approximation of typical zip-level home-value swings -- not derived from the
+// actual national distribution of changes.
+function compareColorExpr(baseProp, cmpProp, unit) {
+  const baseVal = ['to-number', ['get', baseProp]];
+  const cmpVal  = ['to-number', ['get', cmpProp]];
+  const guard = ['any',
+    ['==', ['get', baseProp], null], ['!', ['has', baseProp]],
+    ['==', ['get', cmpProp], null],  ['!', ['has', cmpProp]],
+    ['<=', ['get', baseProp], 0]
+  ];
+  const diff = unit === 'pct'
+    ? ['*', 100, ['/', ['-', cmpVal, baseVal], baseVal]]
+    : ['-', cmpVal, baseVal];
+  const stops = unit === 'pct'
+    ? [-100, -25, -5, 0, 5, 25, 100]
+    : [-150000, -30000, -5000, 0, 15000, 75000, 300000];
+  const interp = ['interpolate', ['linear'], diff];
+  stops.forEach((s, i) => interp.push(s, DIVERGING_COLORS[i]));
+  return ['case', guard, '#cccccc', interp];
+}
+
+function currentZillowPaint() {
+  if (compareMode) {
+    return compareColorExpr(zhviProp(zillowYearIdx), zhviProp(compareYearIdx), compareUnit);
+  }
+  return dollarColorExpr(zhviProp(zillowYearIdx));
+}
+
+let zillowLoaded = false;
+function loadZillowLayer() {
+  if (zillowLoaded) return;
+  zillowLoaded = true;
+  map.addSource('src-zillow', {
+    type: 'vector',
+    url: 'pmtiles://data_pmtiles_zillow/zhvi_zcta.pmtiles'
+  });
+  map.addLayer({
+    id: 'fill-zillow', type: 'fill', source: 'src-zillow', 'source-layer': 'zhvi_zcta',
+    layout: { visibility: 'none' },
+    paint: { 'fill-color': '#cccccc', 'fill-opacity': 0.42 }
+  });
+  map.addLayer({
+    id: 'line-zillow', type: 'line', source: 'src-zillow', 'source-layer': 'zhvi_zcta',
+    layout: { visibility: 'none' },
+    paint: {
+      'line-color': '#555',
+      'line-width': ['interpolate', ['linear'], ['zoom'], 4, 0.0, 7, 0.2, 11, 0.5],
+      'line-opacity': 0.3
+    }
+  });
+}
+
+function updateZillowLegend() {
+  if (compareMode) {
+    document.getElementById('legend-title').textContent =
+      `Home value change, ${zhviLabel(zillowYearIdx)} → ${zhviLabel(compareYearIdx)} (${compareUnit === 'pct' ? '%' : '$'})`;
+    document.getElementById('legend-bar').style.background =
+      'linear-gradient(to right, #7f0000 0%, #d73027 17%, #fee090 33%, #ffffbf 50%, #e0f3f8 67%, #4575b4 83%, #023858 100%)';
+    document.getElementById('legend-ticks').innerHTML =
+      (compareUnit === 'pct'
+        ? ['-100%','-25%','0','+25%','+100%']
+        : ['-150k','-30k','0','+75k','+300k']
+      ).map(t => `<span>${t}</span>`).join('');
+  } else {
+    document.getElementById('legend-title').textContent = 'Zillow home value (2022$), ' + zhviLabel(zillowYearIdx);
+    document.getElementById('legend-bar').style.background = DOLLAR_SEQ_GRAD;
+    document.getElementById('legend-ticks').innerHTML = DOLLAR_SEQ_TICKS.map(t => `<span>${t}</span>`).join('');
+  }
+}
+
+function updateZillowPaint() {
+  if (!map.getLayer('fill-zillow')) return;
+  map.setPaintProperty('fill-zillow', 'fill-color', currentZillowPaint());
+  updateZillowLegend();
+}
+
+function setZillowMode(on) {
+  zillowMode = on;
+  document.getElementById('zillow-controls').style.display = on ? '' : 'none';
+  document.getElementById('btn-border').disabled = on;
+  document.getElementById('btn-percentile').disabled = on;
+
+  if (on) {
+    loadZillowLayer();
+    setVisible(currentYear, false);
+    map.setLayoutProperty('fill-zillow', 'visibility', 'visible');
+    map.setLayoutProperty('line-zillow', 'visibility', 'visible');
+    updateZillowPaint();
+    if (borderFilterActive) {
+      borderFilterActive = false;
+      document.getElementById('btn-border').classList.remove('active');
+      applyBorderFilter();
+    }
+    if (percentileMode) {
+      document.getElementById('btn-percentile').classList.remove('active');
+      setPercentileMode(false);
+    }
+  } else {
+    if (map.getLayer('fill-zillow')) {
+      map.setLayoutProperty('fill-zillow', 'visibility', 'none');
+      map.setLayoutProperty('line-zillow', 'visibility', 'none');
+    }
+    setVisible(currentYear, true);
+    selectVar(currentVar);
+  }
+}
+
+// Percentile fields are 0-1 regardless of the underlying variable's units (share
+// or log-dollars), so a single Blues ramp covers both — cfg.colorExpr (which for
+// hv assumes raw log-dollars) would be wrong applied to a 0-1 percentile.
+function pctileColorExpr(prop) {
+  return ['case',
+    ['any', ['==', ['get', prop], null], ['!', ['has', prop]]],
+    '#cccccc',
+    ['interpolate', ['linear'], ['get', prop],
+      0.00, '#c6dbef',
+      0.20, '#6baed6',
+      0.40, '#2171b5',
+      0.60, '#08519c',
+      0.80, '#08306b',
+      1.00, '#041f3d'
+    ]
+  ];
+}
+
+function currentPaintExpr() {
+  const cfg = VAR_CFG[currentVar];
+  return percentileMode ? pctileColorExpr(cfg.pctileProp) : cfg.colorExpr(cfg.prop);
+}
 
 // ── Map init ──────────────────────────────────────────────────────────────────
 const map = new maplibregl.Map({
@@ -273,11 +473,10 @@ function loadYear(year) {
     url: 'pmtiles://data_pmtiles_ses/ses_' + year + '.pmtiles'
   });
 
-  const cfg = VAR_CFG[currentVar];
   map.addLayer({
     id: 'fill-' + year, type: 'fill', source: 'src-' + year, 'source-layer': 'ses_' + year,
     paint: {
-      'fill-color': cfg.colorExpr(cfg.prop),
+      'fill-color': currentPaintExpr(),
       'fill-opacity': 0.55
     }
   });
@@ -304,11 +503,48 @@ function setVisible(year, on) {
   });
 }
 
+// ── Metro (CBSA) boundary layer ─────────────────────────────────────────────
+let metroLoaded = false;
+function loadMetroLayer() {
+  if (metroLoaded) return;
+  metroLoaded = true;
+  map.addSource('src-metro', {
+    type: 'vector',
+    url: 'pmtiles://data_pmtiles/cbsa_boundaries.pmtiles'
+  });
+  map.addLayer({
+    id: 'metro-line', type: 'line', source: 'src-metro', 'source-layer': 'cbsa_boundaries',
+    layout: { visibility: 'none' },
+    paint: {
+      'line-color': '#d95f0e',
+      'line-width': ['interpolate', ['linear'], ['zoom'], 4, 0.6, 8, 1.4, 11, 2.2],
+      'line-opacity': 0.85
+    }
+  });
+}
+
+function setPercentileMode(on) {
+  percentileMode = on;
+  loadMetroLayer();
+  map.setLayoutProperty('metro-line', 'visibility', on ? 'visible' : 'none');
+  YEARS.forEach(y => {
+    if (map.getLayer('fill-' + y)) map.setPaintProperty('fill-' + y, 'fill-color', currentPaintExpr());
+  });
+  const cfg = VAR_CFG[currentVar];
+  document.getElementById('legend-title').textContent =
+    (on ? 'Percentile within metro — ' : '') + cfg.label;
+  document.getElementById('legend-bar').style.background =
+    on ? 'linear-gradient(to right, #c6dbef 0%, #6baed6 25%, #2171b5 50%, #08519c 75%, #041f3d 100%)' : cfg.barGrad;
+  document.getElementById('legend-ticks').innerHTML =
+    (on ? ['0','25','50','75','100'] : cfg.ticks).map(t => `<span>${t}</span>`).join('');
+}
+
 // ── Year selection ────────────────────────────────────────────────────────────
 function selectYear(year) {
   const prev = currentYear;
   currentYear = year;
   if (!loaded[year]) loadYear(year);
+  if (zillowMode) return; // tract layers stay hidden while the zip layer is showing
   setVisible(year, true);
   if (prev !== year && loaded[prev]) setVisible(prev, false);
 }
@@ -318,14 +554,16 @@ function selectVar(varKey) {
   currentVar = varKey;
   const cfg = VAR_CFG[varKey];
 
-  document.getElementById('legend-title').textContent = cfg.label;
-  document.getElementById('legend-bar').style.background = cfg.barGrad;
+  document.getElementById('legend-title').textContent =
+    (percentileMode ? 'Percentile within metro — ' : '') + cfg.label;
+  document.getElementById('legend-bar').style.background =
+    percentileMode ? 'linear-gradient(to right, #c6dbef 0%, #6baed6 25%, #2171b5 50%, #08519c 75%, #041f3d 100%)' : cfg.barGrad;
   const tickEl = document.getElementById('legend-ticks');
-  tickEl.innerHTML = cfg.ticks.map(t => `<span>${t}</span>`).join('');
+  tickEl.innerHTML = (percentileMode ? ['0','25','50','75','100'] : cfg.ticks).map(t => `<span>${t}</span>`).join('');
 
   YEARS.forEach(y => {
     if (map.getLayer('fill-' + y)) {
-      map.setPaintProperty('fill-' + y, 'fill-color', cfg.colorExpr(cfg.prop));
+      map.setPaintProperty('fill-' + y, 'fill-color', currentPaintExpr());
     }
   });
 
@@ -337,6 +575,13 @@ function selectVar(varKey) {
   }
   document.getElementById('border-divider').style.display = varKey === 'hv' ? '' : 'none';
   document.getElementById('btn-border').style.display     = varKey === 'hv' ? '' : 'none';
+
+  document.getElementById('zillow-divider').style.display = varKey === 'hv' ? '' : 'none';
+  document.getElementById('btn-zillow').style.display     = varKey === 'hv' ? '' : 'none';
+  if (varKey !== 'hv' && zillowMode) {
+    document.getElementById('btn-zillow').classList.remove('active');
+    setZillowMode(false);
+  }
 }
 
 // ── Border filter ─────────────────────────────────────────────────────────────
@@ -370,6 +615,43 @@ map.on('load', () => {
     applyBorderFilter();
   });
 
+  document.getElementById('btn-percentile').addEventListener('click', function() {
+    this.classList.toggle('active');
+    setPercentileMode(this.classList.contains('active'));
+  });
+
+  document.getElementById('btn-zillow').addEventListener('click', function() {
+    this.classList.toggle('active');
+    setZillowMode(this.classList.contains('active'));
+  });
+
+  document.getElementById('zillow-year-slider').addEventListener('input', function() {
+    zillowYearIdx = parseInt(this.value, 10);
+    document.getElementById('zillow-year-label').textContent = zhviLabel(zillowYearIdx);
+    if (zillowMode) updateZillowPaint();
+  });
+
+  document.getElementById('cb-compare').addEventListener('change', function() {
+    compareMode = this.checked;
+    document.getElementById('compare-controls').style.display = compareMode ? '' : 'none';
+    if (zillowMode) updateZillowPaint();
+  });
+
+  document.getElementById('compare-year-slider').addEventListener('input', function() {
+    compareYearIdx = parseInt(this.value, 10);
+    document.getElementById('compare-year-label').textContent = zhviLabel(compareYearIdx);
+    if (zillowMode && compareMode) updateZillowPaint();
+  });
+
+  document.querySelectorAll('input[name="compare-unit"]').forEach(rb => {
+    rb.addEventListener('change', function() {
+      if (this.checked) {
+        compareUnit = this.value;
+        if (zillowMode && compareMode) updateZillowPaint();
+      }
+    });
+  });
+
   // init legend
   selectVar('edu');
 });
@@ -378,6 +660,46 @@ map.on('load', () => {
 const tooltip = document.getElementById('tooltip');
 
 map.on('mousemove', e => {
+  if (zillowMode) {
+    if (!map.getLayer('fill-zillow')) { tooltip.style.display = 'none'; return; }
+    const zfeatures = map.queryRenderedFeatures(e.point, { layers: ['fill-zillow'] });
+    if (!zfeatures.length) {
+      tooltip.style.display = 'none';
+      map.getCanvas().style.cursor = '';
+      return;
+    }
+    const zp = zfeatures[0].properties;
+    const baseProp = zhviProp(zillowYearIdx);
+    const baseVal  = zp[baseProp];
+    let html = `<strong>ZIP ${zp.zip}</strong><br/>`;
+    if (compareMode) {
+      const cmpProp = zhviProp(compareYearIdx);
+      const cmpVal  = zp[cmpProp];
+      if (baseVal != null && cmpVal != null && parseFloat(baseVal) > 0) {
+        const b = parseFloat(baseVal), c = parseFloat(cmpVal);
+        const pctStr = ((c - b) / b * 100).toFixed(1) + '%';
+        const absStr = (c - b >= 0 ? '+$' : '-$') + Math.round(Math.abs(c - b)).toLocaleString();
+        html += `${zhviLabel(zillowYearIdx)}: <strong>${VAR_CFG.hv.fmt(b)}</strong><br/>` +
+                `${zhviLabel(compareYearIdx)}: <strong>${VAR_CFG.hv.fmt(c)}</strong><br/>` +
+                `Change: <strong>${compareUnit === 'pct' ? pctStr : absStr}</strong>`;
+      } else {
+        html += 'Insufficient data for comparison';
+      }
+    } else {
+      html += baseVal != null
+        ? `Home value (${zhviLabel(zillowYearIdx)}): <strong>${VAR_CFG.hv.fmt(parseFloat(baseVal))}</strong>`
+        : 'No data';
+    }
+    tooltip.innerHTML = html;
+    const zMapW = map.getCanvas().width;
+    const zx = e.point.x + 14, zy = e.point.y - 10;
+    tooltip.style.left    = (zx + 240 > zMapW ? e.point.x - 235 : zx) + 'px';
+    tooltip.style.top     = zy + 'px';
+    tooltip.style.display = 'block';
+    map.getCanvas().style.cursor = 'crosshair';
+    return;
+  }
+
   const activeLayers = YEARS
     .map(y => 'fill-' + y)
     .filter(id => map.getLayer(id) &&
@@ -396,10 +718,17 @@ map.on('mousemove', e => {
   const eduVal = p.edu_share != null ? (parseFloat(p.edu_share) * 100).toFixed(1) + '%' : 'N/A';
   const hvVal  = p.hv_2022  != null ? VAR_CFG.hv.fmt(parseFloat(p.hv_2022)) : 'N/A';
 
+  let extra = '';
+  if (percentileMode) {
+    const pctVal = p[VAR_CFG[currentVar].pctileProp];
+    const pctStr = (pctVal != null) ? Math.round(parseFloat(pctVal) * 100) + 'th pctile' : 'outside any metro';
+    extra = `<br/>Metro: ${p.cbsa_name || 'N/A'} (${pctStr})`;
+  }
+
   tooltip.innerHTML =
     `<strong>${p.year} Census</strong><br/>` +
     `BA+ share: <strong>${eduVal}</strong><br/>` +
-    `Home value (2022$): <strong>${hvVal}</strong>`;
+    `Home value (2022$): <strong>${hvVal}</strong>${extra}`;
 
   const mapW = map.getCanvas().width;
   const x    = e.point.x + 14;
