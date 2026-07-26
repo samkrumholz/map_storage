@@ -124,6 +124,38 @@ easy-to-miss copy of the gradient inside `updateLegend()` that also needed updat
   CPIAUCSL, December value each year) — not implemented.
 - Not yet re-tested in browser after this edit — same caveat as above.
 
+### (3c) Inflation adjustment + unified color scale + push to GitHub — done
+- **Inflation adjustment**: folded CPI deflation directly into `08_zhvi_zcta.R` (not a separate
+  post-hoc script, to avoid any risk of double-deflating on a future re-run) — every `zhvi_<year>`
+  is now multiplied by `CPI_dec_2022 / CPI_dec_<year>` using CPI-U NSA (FRED series CPIAUCNS,
+  December value each year; June 2026 for `zhvi_2026_latest`). CPI values are hardcoded in the
+  script (pulled once from `fredgraph.csv?id=CPIAUCNS`) — re-download and update `cpi_dec`/
+  `cpi_latest` if regenerating in a future year and want the base year to roll forward past 2022.
+  Base year 2022 chosen to match `hv_2022`'s existing "(2022$)" convention. Re-ran the full
+  pipeline (23 sec, reusing the cached `zcta_simplified.shp`) and regenerated
+  `data_pmtiles_zillow/zhvi_zcta.pmtiles` (96.6 MB now, up slightly from 96.5 — value magnitudes
+  changed, feature count didn't).
+- **Unified color scale**: moved the green→yellow→red ramp (`DOLLAR_SEQ_STOPS/COLORS/TICKS/GRAD`,
+  `dollarColorExpr()`) to before `VAR_CFG` in `ses.html` and pointed `VAR_CFG.hv` at it too, so
+  the tract-level Census home-value view and the Zillow zip-level view now share one scale
+  (previously only the Zillow layer got it). Percentile-mode's Blues ramp (`pctileColorExpr`,
+  shared with the `edu` variable and with `index.html`) was deliberately left alone — it's a
+  generic 0-1 ramp, not home-value-specific.
+- **Pushed to GitHub**: `origin/main` (`samkrumholz/map_storage`), commit `dda90f2`. Scoped the
+  commit to SES-only files — `ses.html`, `notes.md`, `07_metro_percentile.R`, `08_zhvi_zcta.R`,
+  all of `data_pmtiles_ses/`, `data_pmtiles/cbsa_boundaries.pmtiles`,
+  `data_pmtiles_zillow/zhvi_zcta.pmtiles` — left the Race/Vacancy/Foreign Born/Schools changes
+  (already modified in the working tree from the same session's ask #1/#2 work) uncommitted,
+  since only "the SES maps" were asked for. Excluded from git entirely: `data_zillow/`
+  (raw geojson + intermediate shapefile — geojson already gitignored via `*.geojson`, shapefile
+  parts are just a fast-rebuild cache) and `zillow_downloads/zhvi_zip.csv` (122MB raw Zillow
+  download — over GitHub's 100MB hard limit, not needed for serving anyway, regeneratable from
+  Zillow's public research page).
+- **File size watch**: no `.gitattributes`/Git LFS configured in this repo (git-lfs 3.7.1 *is*
+  installed locally, just unused). `zhvi_zcta.pmtiles` is 96.6 MB — under GitHub's 100MB hard
+  block but over its 50MB warning threshold (push succeeded with a warning). If this grows past
+  ~100MB in a future update (e.g. more years, finer maxzoom), it'll need Git LFS.
+
 
 ## Project
 Interactive MapLibre GL map of White (Non-Hispanic where available) share by census tract, 1930–2020.
