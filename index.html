@@ -6,7 +6,7 @@
   <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no" />
   <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
   <link  href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
-  <script src="https://unpkg.com/pmtiles@3.0.7/dist/pmtiles.js"></script>
+  <script src="https://unpkg.com/pmtiles@4.4.1/dist/pmtiles.js"></script>
   <style>
     * { box-sizing: border-box; }
     body { margin: 0; padding: 0; font-family: -apple-system, Arial, sans-serif; background: #111; }
@@ -256,6 +256,19 @@ function makeColorExpr(prop) {
 const pmtilesProtocol = new pmtiles.Protocol();
 maplibregl.addProtocol('pmtiles', pmtilesProtocol.tile);
 
+// Firefox has a bug where its HTTP cache misapplies range-request responses
+// across different byte ranges of the same URL, corrupting pmtiles reads
+// (protomaps/PMTiles#272) -- shows up as a black map with no console errors.
+// Force every range request to bypass the cache rather than rely on the
+// library's reactive ETag-mismatch retry, which doesn't catch every case.
+function registerPmtiles(path) {
+  const source = new pmtiles.FetchSource(path);
+  source.chromeWindowsNoCache = true;
+  const p = new pmtiles.PMTiles(source);
+  pmtilesProtocol.add(p);
+  return p;
+}
+
 // ── Map init ──────────────────────────────────────────────────────────────────
 const map = new maplibregl.Map({
   container: 'map',
@@ -287,6 +300,7 @@ function loadYear(year) {
   if (loaded[year]) return;
   loaded[year] = true;
 
+  registerPmtiles('data_pmtiles/tracts_' + year + '.pmtiles');
   map.addSource('src-' + year, {
     type: 'vector',
     url: 'pmtiles://data_pmtiles/tracts_' + year + '.pmtiles'
