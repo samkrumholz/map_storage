@@ -1,6 +1,6 @@
 # White Share Map — Session Notes
 **Started:** 2026-04-20  
-**Updated:** 2026-07-25
+**Updated:** 2026-07-30
 
 ## Session 2026-07-25
 
@@ -264,3 +264,47 @@ at 10 min) or st_simplify (OOM on topology graph). Working approach used:
    → output shapefiles in nhgis_downloads/shapefiles/1990_simp/ and 2000_simp/ (36-37 MB each)
 2. R join: join_1990_2000.R reads simplified .shp, joins CSV data, exports GeoJSON
 If regeneration needed, run steps 1 and 2. Do NOT use ms_simplify or st_simplify for these years.
+
+## Session 2026-07-29: Firefox black-screen bug (root cause + fix)
+
+**Symptom:** vacancy.html, ses.html, etc. loaded as a black screen in Firefox (legends/controls fine, no map). Not present in Chrome.
+
+**Diagnostic path:**
+- Headless Chromium tests (Puppeteer) showed clean renders, no errors — false all-clear, since it never tested the actual browser.
+- User ruled out cache/extensions (incognito, same result), then clarified they use Firefox, not Chrome, and confirmed Chrome works fine on the same machine — pointing at a Firefox-specific bug, not hardware/GPU.
+- Switched to Playwright with real headless Firefox. Screenshot of the live site showed a patchwork render: basemap fine, vector tract layer only rendered in scattered isolated patches (e.g., parts of California/Dakotas) — consistent with corrupted tile reads, not a total failure.
+
+**Root cause:** Firefox's HTTP cache misapplies range-request responses across different byte ranges of the same URL (protomaps/PMTiles GitHub #272, discussion #582). Since PMTiles fetches many different byte ranges from one static `.pmtiles` file, Firefox serves back a cached fragment from an earlier range request instead of the newly requested range, corrupting tile data. No console errors are thrown, which is why it presents as a silent black map. Confirmed the old pinned pmtiles.js (3.0.7) has no proactive cache-bypass, only a reactive ETag-mismatch retry that doesn't catch every case.
+
+**Fix:** Bumped `pmtiles@3.0.7` → `pmtiles@4.4.1` (unpkg CDN tag) and added a `registerPmtiles(path)` helper that constructs a `pmtiles.FetchSource`, sets `chromeWindowsNoCache = true` on it (a flag added in 4.4.1 for an analogous Chrome/Windows bug — repurposed here since the underlying fix, forcing `cache: "no-store"` on every range fetch, is browser-agnostic), wraps it in `pmtiles.PMTiles`, and registers it via `pmtilesProtocol.add()` before each `map.addSource()` call. Applied to every pmtiles source in `vacancy.html`, `foreign.html`, `ses.html`, and `index.html`.
+
+**Note on index.html:** that file also contains a large in-progress, unshipped "percentile within metro" toggle feature (new `loadMetroLayer()`, `colorProp()`, `setPercentileMode()`, UI button, tooltip changes) that was NOT touched — its `registerPmtiles('data_pmtiles/cbsa_boundaries.pmtiles')` call was deliberately left out since that function has no live callers yet.
+
+**Testing:** Local repro via a custom Range-capable Node static server (`tools/static_server.js` — `python -m http.server` isn't available, only a Windows Store stub) + Playwright headless Firefox (`tools/diagnose_firefox.js`). Before/after screenshots confirmed all four pages went from broken/partial to full correct renders.
+
+**Push scoping:** User chose "fix only." Hand-built unified-diff patches isolated just the fix hunks (version bump + `registerPmtiles` helper + call-site insertions) and staged them with `git apply --cached`, leaving unrelated uncommitted work untouched in the working tree:
+- `index.html`: percentile-toggle feature (new functions/UI, still unshipped)
+- `foreign.html` / `vacancy.html`: pending color-gradient tweaks (not yet reviewed/finalized)
+- Four `tracts_*.pmtiles` files (1990/2000/2010/2020) that now exceed GitHub's 100MB push limit — need shrinking (more aggressive mapshaper simplification) or Git LFS before they can be committed; no decision made yet on which.
+
+Commit `7b63229` pushed to `origin/main` (samkrumholz/map_storage). Temporary patch files and diagnostic screenshots deleted after use; `tools/diagnose_firefox.js` and `tools/static_server.js` kept as reusable diagnostics.
+
+**Still open:** oversized `tracts_*.pmtiles` files and the percentile-toggle feature remain uncommitted, no plan yet for either.
+
+## Session 2026-07-30: Shipped percentile-toggle feature (Race map) + fixed oversized pmtiles
+
+User approved shipping the percentile-within-metro toggle for `index.html` (Race map), Chrome only for this round. The feature itself was already fully coded from the prior session (color ramp, `colorProp()`, `loadMetroLayer()`, `setPercentileMode()`, UI button, tooltip) — the blocker was that `data_pmtiles/tracts_2000/2010/2020.pmtiles`, once carrying the new `*_pctile_metro` fields, exceeded GitHub's 100 MiB (104,857,600-byte) hard push limit.
+
+**Root cause of bloat:** MVT tiles dedupe properties via a per-tile value dictionary. `GISJOIN` (a unique-per-tract NHGIS join key, confirmed unused anywhere in the map's HTML/JS) and `cbsa_name` (a repeated but unnecessary string) don't dedupe well and dominated file size — far more than the unrounded percentile floats did.
+
+**Fix:** stripped `GISJOIN` and `cbsa_name` from all 9 years' `data/tracts_YYYY.geojson`, rounded the 4 `*_pctile_metro` fields to the nearest 0.02, and regenerated all `data_pmtiles/tracts_YYYY.pmtiles` via `tools/geojson_to_pmtiles.js`. Final sizes, largest first: 2020=92.89 MiB, 2000=88.10 MiB, 2010=84.57 MiB, 1990=82.77 MiB, 1980=45.88 MiB, 1970=23.66 MiB, 1960=14.37 MiB, 1950=5.90 MiB, 1940=2.89 MiB — all under the limit.
+
+Since `cbsa_name` was removed from the tiles, the tooltip needed a replacement: built `tools/cbsa_names.json` (939-entry `cbsa_id → cbsa_name` lookup, extracted from the geojsons before stripping) and embedded it as a `CBSA_NAMES` JS constant directly in `index.html`. Tooltip now resolves `CBSA_NAMES[p.cbsa_id]` instead of reading `p.cbsa_name` off the tile.
+
+**Not yet done:** `07_metro_percentile.R` / `07b_race_percentile_topup.R` do NOT yet bake in this rounding/field-stripping — if either is rerun from scratch, the oversized-pmtiles problem will reappear and need to be reapplied by hand. Worth fixing in the R scripts directly at some point.
+
+**Verification:** local Range-capable static server (`tools/static_server.js`) + a real Chrome binary (from the Puppeteer cache, driven via Playwright's `chromium.launch({ executablePath })` since `playwright install` hadn't downloaded its own Chromium) — `tools/test_percentile_chrome.js`. Confirmed: toggle button flips `percentileMode`, `metro-line` layer becomes visible, `fill-2020` paint switches to the percentile color expression, and hovering a Chicago tract shows the correct tooltip ("Chicago-Naperville-Elgin, IL-IN-WI (50th pctile)"). Only network 404 seen was `favicon.ico` — cosmetic, unrelated.
+
+Committed and pushed: `index.html`, all 9 `data_pmtiles/tracts_*.pmtiles`, `07b_race_percentile_topup.R`, `tools/cbsa_names.json`, plus the dev/test tooling (`tools/static_server.js`, `tools/diagnose_black_screen.js`, `tools/diagnose_firefox.js`, `tools/list_responses.js`, `tools/test_percentile_chrome.js`). Left uncommitted, unrelated to this task: `foreign.html`/`vacancy.html` pending color-gradient tweaks, and the untracked `data_zillow/`/`zillow_downloads/` directories (SES Zillow layer data, ~100MB+ each — not reviewed this session).
+
+**Still open:** SES map (`ses.html`) percentile toggle — mentioned as "done" in the 2026-07-25 entry but its own `data_ses/ses_YYYY.geojson`/pmtiles pipeline has NOT been checked for the same GISJOIN/cbsa_name bloat issue; should verify before assuming it's shippable as-is.
